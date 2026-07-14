@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Banco de dados local
+*.db
+*.sqlite3
+
+# Dados processados (gerados pelo pipeline, não precisam ir pro git)
+data/processed/*
+!data/processed/.gitkeep
+
+# SO
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
