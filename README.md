@@ -14,7 +14,7 @@ Sou formado em Análise e Desenvolvimento de Sistemas, venho da área de TI (pro
 |---|---|---|
 | **v1.0** | ✅ | Planilha original em Excel, como ela é hoje — dados reais, "sujos", com fórmulas e VBA manuais. Ponto de partida honesto do projeto. |
 | **v2.0** | ✅ | Script Python de ETL: leitura do `.xlsx`, limpeza e padronização dos dados (formatos de tempo inconsistentes, categorias duplicadas, etc), saída em CSV/SQLite. |
-| **v3.0** | 🔜 | Enriquecimento automático dos dados via API externa (IGDB/RAWG): capa, ano de lançamento, nota Metacritic. |
+| **v3.0** | ✅ | Enriquecimento automático dos dados via API externa (RAWG): capa, ano de lançamento, nota Metacritic. |
 | **v4.0** | 🔜 | Dashboard interativo em Streamlit, substituindo a aba "Dashboard" manual da planilha. |
 | **v5.0** | 💭 | Automação ponta a ponta (GitHub Actions) + exportação de volta para um `.xlsx` formatado. |
 
@@ -69,6 +69,37 @@ python -m src.run_etl
 
 ```bash
 pytest tests/
+```
+
+## 🌐 v3.0 — Enriquecimento via API (RAWG)
+
+O script em `src/run_enrich.py` consulta a [RAWG Video Games Database](https://rawg.io/apidocs) pra buscar automaticamente, pra cada jogo já limpo na v2.0: capa, data de lançamento e nota do Metacritic.
+
+### Como funciona
+
+- Cada jogo é buscado pelo nome. O resultado mais relevante da RAWG é salvo numa tabela separada (`enriquecimento_rawg`), ligada aos dados originais.
+- Cada resultado recebe um nível de **confiança**: `alta` quando o nome bate exatamente com o da RAWG, `baixa` quando é só o resultado mais relevante de uma busca aproximada (útil pra revisar manualmente casos como remakes ou coletâneas).
+- O processo é **idempotente**: rodar o script várias vezes não gasta cota da API à toa — jogos já enriquecidos numa execução anterior são pulados.
+- Jogos não encontrados na RAWG ficam registrados como tal (não ficam travando o pipeline nem sendo re-consultados sem necessidade).
+
+### Configuração (necessária apenas uma vez)
+
+```bash
+cp .env.example .env
+```
+
+Edite o `.env` e cole sua chave da RAWG:
+```
+RAWG_API_KEY=sua_chave_aqui
+```
+
+O `.env` já está no `.gitignore` — nunca vai pro GitHub.
+
+### Como rodar
+
+```bash
+pip install -r requirements.txt
+python -m src.run_enrich
 ```
 
 ## 🛠️ Tecnologias planejadas
