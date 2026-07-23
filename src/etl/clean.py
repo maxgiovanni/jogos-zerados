@@ -16,7 +16,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from .extract import JogoBruto
+from .extract import DesafioBruto, JogoBruto, JogoDropadoBruto
 
 # Correções conhecidas de digitação em nomes de console.
 # Preferimos uma lista explícita a um "fuzzy match" automático:
@@ -124,6 +124,50 @@ def _limpar_texto(valor: Any) -> str | None:
         return None
     texto = str(valor).strip()
     return texto if texto else None
+
+
+@dataclass
+class JogoDropadoLimpo:
+    linha_planilha: int
+    nome: str
+    console: str
+    nota: float | None
+
+
+@dataclass
+class DesafioLimpo:
+    ano: int
+    progresso: float
+    descricao: str
+
+
+def limpar_dropados(brutos: list[JogoDropadoBruto]) -> list[JogoDropadoLimpo]:
+    return [
+        JogoDropadoLimpo(
+            linha_planilha=b.linha_planilha,
+            nome=str(b.nome).strip(),
+            console=_limpar_console(b.console),
+            nota=float(b.nota) if b.nota is not None else None,
+        )
+        for b in brutos
+    ]
+
+
+def limpar_desafios(brutos: list[DesafioBruto]) -> list[DesafioLimpo]:
+    limpos = []
+    for b in brutos:
+        # a planilha guarda progresso como fração (0 a 1); convertemos
+        # para percentual (0 a 100), mais natural pra exibir num dashboard
+        progresso = float(b.progresso) if b.progresso is not None else 0.0
+        limpos.append(
+            DesafioLimpo(
+                ano=b.ano,
+                progresso=round(min(progresso, 1.0) * 100, 1),
+                descricao=_limpar_texto(b.descricao) or "",
+            )
+        )
+    return limpos
+
 
 
 def limpar_jogos(brutos: list[JogoBruto]) -> tuple[list[JogoLimpo], list[dict]]:

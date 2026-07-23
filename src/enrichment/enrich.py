@@ -57,6 +57,59 @@ def _calcular_confianca(nome_original: str, resultado_rawg: dict) -> str:
     return "alta" if nome_normalizado == nome_rawg_normalizado else "baixa"
 
 
+def _enriquecer_um(conn: sqlite3.Connection, jogo_id: int, nome: str) -> ResultadoEnriquecimento:
+    """Consulta a RAWG para um único jogo e grava o resultado. Não faz
+    commit — quem chama decide quando salvar (permite tanto uso em lote
+    quanto uso avulso)."""
+    try:
+        achado = buscar_jogo(nome)
+    except RawgApiError as e:
+        return ResultadoEnriquecimento(jogo_id, nome, encontrado=False, erro=str(e))
+
+    if achado is None:
+        conn.execute(
+            "INSERT INTO enriquecimento_rawg (jogo_id, encontrado) VALUES (?, 0)",
+            (jogo_id,),
+        )
+        return ResultadoEnriquecimento(jogo_id, nome, encontrado=False)
+
+    confianca = _calcular_confianca(nome, achado)
+    conn.execute(
+        """
+        INSERT INTO enriquecimento_rawg
+            (jogo_id, rawg_id, nome_rawg, capa_url, data_lancamento,
+             nota_metacritic, generos_rawg, encontrado, confianca_match)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+        """,
+        (
+            jogo_id,
+            achado.get("id"),
+            achado.get("name"),
+            achado.get("background_image"),
+            achado.get("released"),
+            achado.get("metacritic"),
+            ", ".join(g["name"] for g in achado.get("genres", [])),
+            confianca,
+        ),
+    )
+    return ResultadoEnriquecimento(jogo_id, nome, encontrado=True, confianca=confianca)
+
+
+def enriquecer_jogo_por_id(caminho_db: str | Path, jogo_id: int, nome: str) -> ResultadoEnriquecimento:
+    """Enriquece um único jogo — usado pelo app quando você cadastra um
+    jogo novo pelo formulário, pra já trazer a capa na hora, sem precisar
+    esperar o próximo `run_enrich.py` em lote."""
+    conn = sqlite3.connect(caminho_db)
+    conn.execute(CREATE_TABLE_SQL)
+    try:
+        conn.execute("DELETE FROM enriquecimento_rawg WHERE jogo_id = ?", (jogo_id,))
+        resultado = _enriquecer_um(conn, jogo_id, nome)
+        conn.commit()
+        return resultado
+    finally:
+        conn.close()
+
+
 def enriquecer_jogos(caminho_db: str | Path) -> list[ResultadoEnriquecimento]:
     conn = sqlite3.connect(caminho_db)
     conn.execute(CREATE_TABLE_SQL)
@@ -69,41 +122,7 @@ def enriquecer_jogos(caminho_db: str | Path) -> list[ResultadoEnriquecimento]:
     for jogo_id, nome in jogos:
         if jogo_id in ja_feitos:
             continue
-
-        try:
-            achado = buscar_jogo(nome)
-        except RawgApiError as e:
-            resultados.append(ResultadoEnriquecimento(jogo_id, nome, encontrado=False, erro=str(e)))
-            continue
-
-        if achado is None:
-            conn.execute(
-                "INSERT INTO enriquecimento_rawg (jogo_id, encontrado) VALUES (?, 0)",
-                (jogo_id,),
-            )
-            resultados.append(ResultadoEnriquecimento(jogo_id, nome, encontrado=False))
-            continue
-
-        confianca = _calcular_confianca(nome, achado)
-        conn.execute(
-            """
-            INSERT INTO enriquecimento_rawg
-                (jogo_id, rawg_id, nome_rawg, capa_url, data_lancamento,
-                 nota_metacritic, generos_rawg, encontrado, confianca_match)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
-            """,
-            (
-                jogo_id,
-                achado.get("id"),
-                achado.get("name"),
-                achado.get("background_image"),
-                achado.get("released"),
-                achado.get("metacritic"),
-                ", ".join(g["name"] for g in achado.get("genres", [])),
-                confianca,
-            ),
-        )
-        resultados.append(ResultadoEnriquecimento(jogo_id, nome, encontrado=True, confianca=confianca))
+        resultados.append(_enriquecer_um(conn, jogo_id, nome))
 
     conn.commit()
     conn.close()

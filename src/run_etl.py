@@ -18,9 +18,9 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 
-from src.etl.extract import extrair_jogos
-from src.etl.clean import limpar_jogos
-from src.etl.load import salvar_csv, salvar_sqlite
+from src.etl.extract import extrair_jogos, extrair_dropados, extrair_desafios
+from src.etl.clean import limpar_jogos, limpar_dropados, limpar_desafios
+from src.etl.load import salvar_csv, salvar_sqlite, salvar_dropados, salvar_desafios
 
 RAIZ = Path(__file__).resolve().parent.parent
 PLANILHA_ORIGEM = RAIZ / "data" / "raw" / "Jogos_Zerados_-_Max.xlsx"
@@ -35,11 +35,21 @@ def main() -> None:
 
     limpos, avisos = limpar_jogos(brutos)
 
-    print("\nSalvando dados tratados...")
+    print(f"\nSalvando dados tratados...")
     salvar_sqlite(limpos, SAIDA_DB)
     salvar_csv(limpos, SAIDA_CSV)
     print(f"  -> {SAIDA_DB}")
     print(f"  -> {SAIDA_CSV}")
+
+    dropados_brutos = extrair_dropados(PLANILHA_ORIGEM)
+    dropados_limpos = limpar_dropados(dropados_brutos)
+    salvar_dropados(dropados_limpos, SAIDA_DB)
+    print(f"  -> {len(dropados_limpos)} jogo(s) dropado(s) salvos")
+
+    desafios_brutos = extrair_desafios(PLANILHA_ORIGEM)
+    desafios_limpos = limpar_desafios(desafios_brutos)
+    salvar_desafios(desafios_limpos, SAIDA_DB)
+    print(f"  -> {len(desafios_limpos)} desafio(s) salvos")
 
     status_count = Counter(j.tempo_status for j in limpos)
     print("\nResumo da coluna 'Tempo':")

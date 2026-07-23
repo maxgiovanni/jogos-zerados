@@ -33,6 +33,11 @@ COLUNAS = {
 ABA_PRINCIPAL = "Jogos Zerados"
 LINHA_INICIAL = 2  # linha 1 é cabeçalho
 
+ABA_DROPADOS = "Jogos Dropados"
+LINHA_INICIAL_DROPADOS = 6  # linha 5 é cabeçalho ("NOTA", "JOGOS QUE EU DROPEI", "CONSOLE")
+
+ABA_DESAFIOS = "Desafios"
+
 
 @dataclass
 class JogoBruto:
@@ -49,6 +54,87 @@ class JogoBruto:
     nota: Any
     dificuldade: Any
     condicao_zeramento: Any
+
+
+@dataclass
+class JogoDropadoBruto:
+    linha_planilha: int
+    nota: Any
+    nome: Any
+    console: Any
+
+
+@dataclass
+class DesafioBruto:
+    ano: int
+    progresso: Any
+    descricao: Any
+
+
+def extrair_dropados(caminho_planilha: str | Path) -> list[JogoDropadoBruto]:
+    """Lê a aba 'Jogos Dropados' (colunas C=nota, D=nome, G=console,
+    cabeçalho na linha 5)."""
+    wb = openpyxl.load_workbook(caminho_planilha, data_only=True)
+    ws = wb[ABA_DROPADOS]
+
+    registros: list[JogoDropadoBruto] = []
+    linhas_vazias_seguidas = 0
+    linha = LINHA_INICIAL_DROPADOS
+
+    while linhas_vazias_seguidas < 3:
+        nome = ws.cell(row=linha, column=4).value  # coluna D
+
+        if nome is None:
+            linhas_vazias_seguidas += 1
+            linha += 1
+            continue
+
+        linhas_vazias_seguidas = 0
+        registros.append(
+            JogoDropadoBruto(
+                linha_planilha=linha,
+                nota=ws.cell(row=linha, column=3).value,  # coluna C
+                nome=nome,
+                console=ws.cell(row=linha, column=7).value,  # coluna G
+            )
+        )
+        linha += 1
+
+    return registros
+
+
+def extrair_desafios(caminho_planilha: str | Path) -> list[DesafioBruto]:
+    """Lê a aba 'Desafios'.
+
+    Essa aba não tem uma tabela regular: tem cabeçalhos de ano soltos
+    (ex: 2025.0 sozinho na coluna B) seguidos de linhas de desafio
+    (progresso 0-1 na coluna B + descrição na coluna C). Também existem
+    linhas "placeholder" (progresso sem descrição) que representam
+    metas ainda não definidas — essas são ignoradas.
+    """
+    wb = openpyxl.load_workbook(caminho_planilha, data_only=True)
+    ws = wb[ABA_DESAFIOS]
+
+    registros: list[DesafioBruto] = []
+    ano_atual: int | None = None
+
+    for row in ws.iter_rows(min_row=1, max_row=100, max_col=3):
+        valor_b = row[1].value  # coluna B
+        valor_c = row[2].value  # coluna C
+
+        if isinstance(valor_b, (int, float)) and valor_b >= 2000:
+            ano_atual = int(valor_b)
+            continue
+
+        if valor_c is None or ano_atual is None:
+            continue  # nota solta, placeholder vazio, ou fora de uma seção de ano
+
+        registros.append(
+            DesafioBruto(ano=ano_atual, progresso=valor_b, descricao=valor_c)
+        )
+
+    return registros
+
 
 
 def extrair_jogos(caminho_planilha: str | Path) -> list[JogoBruto]:
