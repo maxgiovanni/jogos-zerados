@@ -2,20 +2,21 @@
 
 Projeto pessoal que nasceu de uma planilha manual pra registrar todo jogo que eu zero — inspirada na planilha do [Cogumelando](https://www.youtube.com/@cogumelando) — e que estou evoluindo aos poucos para uma pipeline de dados em Python, como projeto de portfólio.
 
-A ideia é simples: em vez de esconder o processo, o repositório documenta a evolução real, do jeito que aconteceu, desde a planilha manual em Excel, programada em VBA até uma automação em Python com banco de dados, integração com API e dashboard.
+A ideia é simples: em vez de esconder o processo, o repositório documenta a evolução real, do jeito que ela aconteceu — da planilha manual em Excel/VBA até uma automação em Python com banco de dados, integração com API e dashboard.
 
 ## 📌 Sobre mim / contexto do projeto
 
-Sou formado em Análise e Desenvolvimento de Sistemas, trabalhando com processos de TI, e estou migrando para desenvolvimento/dados, aprimorando meus conhecimentos em Python. Esse projeto é ao mesmo tempo um hobby (curto registrar os jogos que zero) e um exercício prático de portfólio.
+Sou formado em Análise e Desenvolvimento de Sistemas, venho da área de TI (processos) e estou migrando para desenvolvimento/dados, estudando Python. Esse projeto é ao mesmo tempo um hobby (curto registrar os jogos que zero) e um exercício prático de portfólio.
 
 ## 🗺️ Roadmap / Versões
 
 | Versão | Status | Descrição |
 |---|---|---|
-| **v1.0** | ✅ | Planilha original em Excel, a versão mais "crua", que usei por muito tempo. Dados reais, "sujos", com fórmulas e VBA manuais. Ponto de partida do projeto, onde após zerar os jogos, simplesmente incluía uma linha na planilha e adicionava comentários. |
+| **v1.0** | ✅ | Planilha original em Excel, como ela é hoje — dados reais, "sujos", com fórmulas e VBA manuais. Ponto de partida honesto do projeto. |
 | **v2.0** | ✅ | Script Python de ETL: leitura do `.xlsx`, limpeza e padronização dos dados (formatos de tempo inconsistentes, categorias duplicadas, etc), saída em CSV/SQLite. |
 | **v3.0** | ✅ | Enriquecimento automático dos dados via API externa (RAWG): capa, ano de lançamento, nota Metacritic. |
 | **v4.0** | ✅ | Dashboard interativo em Streamlit (biblioteca estilo Steam/HowLongToBeat): visualizar, cadastrar e editar jogos, com sincronização automática de volta para Excel. |
+| **v4.1** | ✅ | Correções de bugs reportados em uso real: comentários pessoais recuperados dos comentários do Excel, prevenção de duplicatas, datas em português, CRUD de desafios, alinhamento de capas. |
 | **v5.0** | 💭 | Automação ponta a ponta (GitHub Actions) + exportação de volta para um `.xlsx` formatado. |
 
 Cada versão é marcada como uma tag/release no repositório, então dá pra acompanhar a evolução pelo histórico do Git.
@@ -39,11 +40,11 @@ jogos-zerados/
 O arquivo em `data/raw/Jogos_Zerados_-_Max.xlsx` é a planilha manual que uso desde antes de começar esse projeto. Ela contém:
 
 - **Jogos Zerados**: lista principal com jogo, console, gênero, tipo, data, tempo de jogo, nota e condição de zeramento.
-- **Jogos Dropados**: jogos que comecei e abandonei por algum motivo descrito.
+- **Jogos Dropados**: jogos que comecei e não terminei.
 - **Desafios**: metas anuais (ex: "zerar toda a franquia God of War").
 - **Dashboard**: contagem manual de jogos por gênero via fórmulas.
 
-É uma planilha real de uso pessoal, com inconsistências (formatos de tempo diferentes, categorias duplicadas por espaço extra, etc) que serão o ponto de partida para o trabalho de limpeza de dados nas próximas versões.
+É uma planilha real de uso pessoal — com inconsistências (formatos de tempo diferentes, categorias duplicadas por espaço extra, etc) que serão o ponto de partida para o trabalho de limpeza de dados nas próximas versões.
 
 ## ⚙️ v2.0 — Pipeline de ETL em Python
 
@@ -82,6 +83,40 @@ python -m src.run_enrich
 
 O pipeline é **idempotente**: jogos que já existiam não são duplicados nem re-consultados na API — só o que for novo (identificado pelo par nome + console) é processado. Jogos que você editar na planilha (ex: corrigir uma nota) têm seus dados atualizados no banco, mas mantêm o mesmo ID interno, preservando o vínculo com os dados já buscados na RAWG.
 
+## 🐛 v4.1 — Correções (feedback de uso real)
+
+Depois de usar o dashboard no dia a dia, alguns problemas apareceram e foram corrigidos:
+
+- **Comentários pessoais recuperados**: descoberta importante — as opiniões escritas na planilha original não estavam numa coluna, estavam em *comentários do Excel* anexados às células de nota (clique direito → comentário). O ETL agora lê o XML interno do `.xlsx` pra recuperar esse texto, separado da "Condição de zeramento". 53 dos 56 comentários da planilha original foram recuperados com sucesso.
+- **Duplicidade ao cadastrar jogo já existente**: o formulário agora verifica se já existe um jogo com o mesmo nome + console antes de inserir, e avisa em vez de criar um registro duplicado.
+- **Datas em português**: o campo de data agora usa formato `DD/MM/AAAA`. Datas exibidas nos detalhes do jogo aparecem por extenso em português (ex: "12 de fevereiro de 2026"). *Limitação conhecida*: o calendário pop-up do `st.date_input` em si (nomes dos meses no popup de seleção) é uma limitação do próprio Streamlit — ele não suporta localização nativamente (é uma issue aberta no projeto deles). O texto exibido no resto do app, porém, está 100% em português.
+- **CRUD completo de Desafios**: agora dá pra adicionar, editar e excluir metas direto pela aba "Desafios", sem precisar mexer no banco na mão.
+- **Capas desalinhadas**: corrigido com uma técnica de CSS (`object-fit: cover`) que corta a imagem mantendo a proporção, garantindo que todas as capas tenham exatamente o mesmo tamanho na grade, não importa a resolução original. Também foi adicionado um preview com console e tempo de jogo abaixo de cada capa.
+
+**Pendente pra próxima versão** (baixa prioridade, mencionado no feedback): tema claro/escuro personalizado — o Streamlit já oferece um seletor nativo (canto superior direito, menu "⋮"), mas dá pra ir além com um tema customizado no `.streamlit/config.toml` futuramente.
+
+## 🖥️ v4.0 — Dashboard (biblioteca estilo Steam)
+
+A partir da v4.0, o **banco de dados passa a ser a fonte da verdade** do projeto — não a planilha. Você não precisa mais editar o `.xlsx` na mão: o app cuida de tudo.
+
+```bash
+streamlit run dashboard/app.py
+```
+
+### O que o app faz
+
+- **Biblioteca**: grade com a capa de cada jogo zerado (buscada automaticamente na RAWG), com busca por nome.
+- **Detalhes**: clique num jogo pra ver capa grande, nota, tempo, dificuldade, nota Metacritic e suas observações.
+- **Adicionar jogo**: formulário com os mesmos campos da planilha original. Ao salvar, o jogo já é automaticamente enriquecido com dados da RAWG (capa, lançamento, Metacritic).
+- **Editar**: qualquer jogo já cadastrado pode ser editado (útil pra corrigir dados importados da planilha original, que tinham inconsistências).
+- **Dropados** e **Desafios**: visualização dos dados históricos importados da planilha (metas anuais com barra de progresso).
+
+### Sincronização com Excel
+
+Toda vez que você cadastra ou edita um jogo pelo app, um arquivo `data/processed/Jogos_Zerados_atualizado.xlsx` é gerado/atualizado automaticamente — assim você sempre tem uma versão em Excel pra consultar ou compartilhar, sem precisar editar nada manualmente.
+
+**Importante:** o arquivo original em `data/raw/Jogos_Zerados_-_Max.xlsx` (v1.0) nunca é modificado — ele fica congelado como registro histórico do ponto de partida do projeto.
+
 ## 🌐 v3.0 — Enriquecimento via API (RAWG)
 
 O script em `src/run_enrich.py` consulta a [RAWG Video Games Database](https://rawg.io/apidocs) pra buscar automaticamente, pra cada jogo já limpo na v2.0: capa, data de lançamento e nota do Metacritic.
@@ -112,28 +147,6 @@ O `.env` já está no `.gitignore` — nunca vai pro GitHub.
 pip install -r requirements.txt
 python -m src.run_enrich
 ```
-
-## 🖥️ v4.0 — Dashboard (biblioteca estilo Steam)
-
-A partir da v4.0, o **banco de dados passa a ser a verdadeira fonte** do projeto — não a planilha. Não é mais necessário editar o `.xlsx` na mão: o app cuida de tudo.
-
-```bash
-streamlit run dashboard/app.py
-```
-
-### O que o app faz
-
-- **Biblioteca**: grade com a capa de cada jogo zerado (buscada automaticamente na RAWG), com busca por nome.
-- **Detalhes**: clique num jogo pra ver capa grande, nota, tempo, dificuldade, nota Metacritic e suas observações.
-- **Adicionar jogo**: formulário com os mesmos campos da planilha original. Ao salvar, o jogo já é automaticamente enriquecido com dados da RAWG (capa, lançamento, Metacritic).
-- **Editar**: qualquer jogo já cadastrado pode ser editado (útil pra corrigir dados importados da planilha original, que tinham inconsistências).
-- **Dropados** e **Desafios**: visualização dos dados históricos importados da planilha (metas anuais com barra de progresso).
-
-### Sincronização com Excel
-
-Toda vez que você cadastra ou edita um jogo pelo app, um arquivo `data/processed/Jogos_Zerados_atualizado.xlsx` é gerado/atualizado automaticamente — assim, existe sempre uma versão em Excel pra consultar ou compartilhar, sem precisar editar nada manualmente.
-
-**Importante:** o arquivo original em `data/raw/Jogos_Zerados_-_Max.xlsx` (v1.0) nunca é modificado — ele fica congelado como registro histórico do ponto de partida do projeto.
 
 ## 🛠️ Tecnologias planejadas
 

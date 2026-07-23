@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS jogos_zerados (
     tempo_bruto TEXT,
     nota REAL,
     dificuldade TEXT,
-    condicao_zeramento TEXT
+    condicao_zeramento TEXT,
+    comentario_pessoal TEXT
 );
 """
 
@@ -50,7 +51,7 @@ CREATE TABLE IF NOT EXISTS desafios (
 CAMPOS_CSV = [
     "linha_planilha", "ordem", "nome", "console", "genero", "tipo", "data",
     "tempo_horas", "tempo_status", "tempo_bruto", "nota", "dificuldade",
-    "condicao_zeramento",
+    "condicao_zeramento", "comentario_pessoal",
 ]
 
 
@@ -64,6 +65,17 @@ def _formatar_data(valor) -> str | None:
     if isinstance(valor, (datetime.date, datetime.datetime)):
         return valor.isoformat()
     return str(valor)
+
+
+def migrar_esquema(conn: sqlite3.Connection) -> None:
+    """Adiciona colunas novas em bancos criados por uma versão anterior
+    do projeto, sem apagar nada. Sempre que uma coluna nova for
+    adicionada ao esquema, um ALTER TABLE 'silencioso' (ignora erro se
+    a coluna já existir) entra aqui."""
+    try:
+        conn.execute("ALTER TABLE jogos_zerados ADD COLUMN comentario_pessoal TEXT")
+    except sqlite3.OperationalError:
+        pass  # coluna já existe
 
 
 def salvar_sqlite(jogos: list[JogoLimpo], caminho_db: str | Path) -> None:
@@ -87,6 +99,7 @@ def salvar_sqlite(jogos: list[JogoLimpo], caminho_db: str | Path) -> None:
     conn = sqlite3.connect(caminho_db)
     try:
         conn.execute(CREATE_TABLE_SQL)
+        migrar_esquema(conn)
 
         campos_atualizaveis = [c for c in CAMPOS_CSV if c not in ("nome", "console")]
 

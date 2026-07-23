@@ -41,6 +41,7 @@ class JogoLimpo:
     nota: float | None
     dificuldade: str | None
     condicao_zeramento: str | None
+    comentario_pessoal: str | None
 
 
 def _parse_tempo(valor: Any) -> tuple[float | None, str]:
@@ -210,6 +211,7 @@ def limpar_jogos(brutos: list[JogoBruto]) -> tuple[list[JogoLimpo], list[dict]]:
                 nota=float(bruto.nota) if bruto.nota is not None else None,
                 dificuldade=_limpar_texto(bruto.dificuldade),
                 condicao_zeramento=_limpar_texto(bruto.condicao_zeramento),
+                comentario_pessoal=_limpar_texto(bruto.comentario_pessoal),
             )
         )
 

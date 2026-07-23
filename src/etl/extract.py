@@ -13,6 +13,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import re
+import zipfile
+from xml.etree import ElementTree
+
 import openpyxl
 
 # Mapeamento explícito das colunas usadas na aba "Jogos Zerados".
@@ -54,6 +58,7 @@ class JogoBruto:
     nota: Any
     dificuldade: Any
     condicao_zeramento: Any
+    comentario_pessoal: Any = None
 
 
 @dataclass
@@ -137,6 +142,53 @@ def extrair_desafios(caminho_planilha: str | Path) -> list[DesafioBruto]:
 
 
 
+NS_THREADED_COMMENT = "{http://schemas.microsoft.com/office/spreadsheetml/2018/threadedcomments}"
+COLUNA_COMENTARIOS = "H"  # comentários pessoais foram anexados às células de nota
+
+
+def extrair_comentarios_pessoais(caminho_planilha: str | Path) -> dict[int, str]:
+    """Extrai os comentários encadeados ("threaded comments") do Excel.
+
+    Achado importante: o autor da planilha não escrevia suas opiniões
+    numa coluna — ele usava o recurso de comentário do Excel (clique
+    direito > novo comentário) em cima da célula de nota. O openpyxl
+    não expõe o texto desses comentários através de `cell.comment`
+    (só mostra um aviso de compatibilidade), então lemos o XML
+    interno do .xlsx diretamente.
+
+    Retorna um dicionário {linha: texto_completo}, já juntando
+    comentário original + respostas em sequência (uma pessoa às vezes
+    complementa a própria opinião com uma segunda mensagem, tipo um
+    "Obs:" adicional).
+    """
+    comentarios_por_celula: dict[str, list[tuple[str, str]]] = {}
+
+    with zipfile.ZipFile(caminho_planilha) as z:
+        arquivos = [n for n in z.namelist() if "threadedComments" in n and n.endswith(".xml")]
+        for nome_arquivo in arquivos:
+            with z.open(nome_arquivo) as f:
+                root = ElementTree.parse(f).getroot()
+                for tc in root.findall(f"{NS_THREADED_COMMENT}threadedComment"):
+                    ref = tc.get("ref", "")
+                    data_hora = tc.get("dT", "")
+                    texto_el = tc.find(f"{NS_THREADED_COMMENT}text")
+                    texto = texto_el.text if texto_el is not None else ""
+                    comentarios_por_celula.setdefault(ref, []).append((data_hora, texto or ""))
+
+    resultado: dict[int, str] = {}
+    for ref, itens in comentarios_por_celula.items():
+        match = re.match(r"([A-Z]+)(\d+)", ref)
+        if not match:
+            continue
+        coluna, linha = match.groups()
+        if coluna != COLUNA_COMENTARIOS:
+            continue
+        itens.sort(key=lambda item: item[0])  # ordena por data/hora do comentário
+        resultado[int(linha)] = "\n\n".join(texto for _, texto in itens if texto)
+
+    return resultado
+
+
 def extrair_jogos(caminho_planilha: str | Path) -> list[JogoBruto]:
     """Lê a aba 'Jogos Zerados' e retorna uma lista de registros brutos.
 
@@ -146,6 +198,7 @@ def extrair_jogos(caminho_planilha: str | Path) -> list[JogoBruto]:
     """
     wb = openpyxl.load_workbook(caminho_planilha, data_only=True)
     ws = wb[ABA_PRINCIPAL]
+    comentarios = extrair_comentarios_pessoais(caminho_planilha)
 
     registros: list[JogoBruto] = []
     linhas_vazias_seguidas = 0
@@ -163,7 +216,13 @@ def extrair_jogos(caminho_planilha: str | Path) -> list[JogoBruto]:
             continue
 
         linhas_vazias_seguidas = 0
-        registros.append(JogoBruto(linha_planilha=linha, **valores))
+        registros.append(
+            JogoBruto(
+                linha_planilha=linha,
+                comentario_pessoal=comentarios.get(linha),
+                **valores,
+            )
+        )
         linha += 1
 
     return registros

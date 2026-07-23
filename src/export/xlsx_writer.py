@@ -20,7 +20,7 @@ from openpyxl.styles import Font
 
 CABECALHO = [
     "Nome", "Console", "Gênero", "Tipo", "Data", "Tempo (horas)",
-    "Nota", "Dificuldade", "Condição de Zeramento",
+    "Nota", "Dificuldade", "Condição de Zeramento", "Comentário Pessoal",
     "Capa (RAWG)", "Nota Metacritic",
 ]
 
@@ -32,7 +32,7 @@ def exportar_para_xlsx(caminho_db: str | Path, caminho_xlsx: str | Path) -> None
         jogos = conn.execute(
             """
             SELECT j.nome, j.console, j.genero, j.tipo, j.data, j.tempo_horas,
-                   j.nota, j.dificuldade, j.condicao_zeramento,
+                   j.nota, j.dificuldade, j.condicao_zeramento, j.comentario_pessoal,
                    e.capa_url, e.nota_metacritic
             FROM jogos_zerados j
             LEFT JOIN enriquecimento_rawg e ON e.jogo_id = j.id
@@ -54,7 +54,7 @@ def exportar_para_xlsx(caminho_db: str | Path, caminho_xlsx: str | Path) -> None
             [
                 jogo["nome"], jogo["console"], jogo["genero"], jogo["tipo"],
                 jogo["data"], jogo["tempo_horas"], jogo["nota"],
-                jogo["dificuldade"], jogo["condicao_zeramento"],
+                jogo["dificuldade"], jogo["condicao_zeramento"], jogo["comentario_pessoal"],
                 jogo["capa_url"], jogo["nota_metacritic"],
             ]
         )

@@ -16,6 +16,7 @@ from src.etl.load import (
     CREATE_TABLE_DESAFIOS_SQL,
     CREATE_TABLE_DROPADOS_SQL,
     CREATE_TABLE_SQL,
+    migrar_esquema,
 )
 from src.enrichment.enrich import CREATE_TABLE_SQL as CREATE_TABLE_ENRIQUECIMENTO_SQL
 
@@ -26,6 +27,7 @@ def _connect(caminho_db: str | Path) -> sqlite3.Connection:
     conn = sqlite3.connect(caminho_db)
     conn.row_factory = sqlite3.Row
     conn.execute(CREATE_TABLE_SQL)
+    migrar_esquema(conn)
     conn.execute(CREATE_TABLE_ENRIQUECIMENTO_SQL)
     conn.execute(CREATE_TABLE_DROPADOS_SQL)
     conn.execute(CREATE_TABLE_DESAFIOS_SQL)
@@ -53,6 +55,21 @@ def obter_jogo(caminho_db: str | Path, jogo_id: int) -> dict[str, Any] | None:
     conn = _connect(caminho_db)
     try:
         linha = conn.execute(f"{_SELECT_JOGO_COM_RAWG} WHERE j.id = ?", (jogo_id,)).fetchone()
+        return dict(linha) if linha else None
+    finally:
+        conn.close()
+
+
+def jogo_existe(caminho_db: str | Path, nome: str, console: str) -> dict[str, Any] | None:
+    """Verifica se já existe um jogo com esse nome+console — usado pra
+    evitar duplicatas ao cadastrar pelo formulário (o upsert do ETL já
+    resolve isso pra importações da planilha, mas o cadastro manual
+    insere direto, então precisa dessa checagem própria)."""
+    conn = _connect(caminho_db)
+    try:
+        linha = conn.execute(
+            "SELECT * FROM jogos_zerados WHERE nome = ? AND console = ?", (nome, console)
+        ).fetchone()
         return dict(linha) if linha else None
     finally:
         conn.close()
@@ -103,5 +120,39 @@ def listar_desafios(caminho_db: str | Path) -> list[dict[str, Any]]:
     try:
         linhas = conn.execute("SELECT * FROM desafios ORDER BY ano DESC, id").fetchall()
         return [dict(linha) for linha in linhas]
+    finally:
+        conn.close()
+
+
+def inserir_desafio(caminho_db: str | Path, ano: int, descricao: str, progresso: float = 0.0) -> int:
+    conn = _connect(caminho_db)
+    try:
+        cursor = conn.execute(
+            "INSERT INTO desafios (ano, progresso, descricao) VALUES (?, ?, ?)",
+            (ano, progresso, descricao),
+        )
+        conn.commit()
+        return cursor.lastrowid
+    finally:
+        conn.close()
+
+
+def atualizar_desafio(caminho_db: str | Path, desafio_id: int, descricao: str, progresso: float) -> None:
+    conn = _connect(caminho_db)
+    try:
+        conn.execute(
+            "UPDATE desafios SET descricao = ?, progresso = ? WHERE id = ?",
+            (descricao, progresso, desafio_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def excluir_desafio(caminho_db: str | Path, desafio_id: int) -> None:
+    conn = _connect(caminho_db)
+    try:
+        conn.execute("DELETE FROM desafios WHERE id = ?", (desafio_id,))
+        conn.commit()
     finally:
         conn.close()
